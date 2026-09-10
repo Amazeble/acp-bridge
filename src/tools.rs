@@ -385,7 +385,8 @@ fn search_dir(
     }
 }
 
-/// Execute a bash command in the working directory with a timeout.
+/// Execute a command in the working directory with a timeout.
+/// On Windows, uses `cmd /c`; on Unix-like systems, uses `bash -c`.
 fn execute_bash(working_dir: &Path, command: &str) -> String {
     if command.is_empty() {
         return "Error: command is empty".to_string();
@@ -393,12 +394,20 @@ fn execute_bash(working_dir: &Path, command: &str) -> String {
 
     debug!(command, "bash");
 
-    match Command::new("bash")
+    #[cfg(target_os = "windows")]
+    let result = Command::new("cmd")
+        .args(["/c", command])
+        .current_dir(working_dir)
+        .output();
+
+    #[cfg(not(target_os = "windows"))]
+    let result = Command::new("bash")
         .arg("-c")
         .arg(command)
         .current_dir(working_dir)
-        .output()
-    {
+        .output();
+
+    match result {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);

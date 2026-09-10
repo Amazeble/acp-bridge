@@ -263,7 +263,7 @@ async fn run_acp_loop(state: Arc<AppState>) {
                                 acp::send_response(id, result);
                             }
                             "session/new" => {
-                                let raw_cwd = params.get("cwd").and_then(|v| v.as_str()).unwrap_or("/tmp");
+                                let raw_cwd = params.get("cwd").and_then(|v| v.as_str()).unwrap_or(".");
                                 if let Some(servers) = params.get("mcpServers").and_then(|v| v.as_array()) {
                                     if !servers.is_empty() {
                                         debug!(count = servers.len(), "Ignoring mcpServers param (not supported in v0.7)");
