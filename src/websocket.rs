@@ -94,43 +94,47 @@ async fn handle_websocket_connection(
     
     // Spawn task to forward notifications to WebSocket client
     let write_handle = tokio::spawn(async move {
-        while let Ok(notification) = notify_rx.recv().await {
+        while let Some(notification) = notify_rx.recv().await {
             let rpc_msg = match notification {
-                Notification::Progress { session_id, progress, message } => {
+                Notification::Thinking => {
                     json!({
                         "jsonrpc": "2.0",
-                        "method": "session/progress",
+                        "method": "session/thinking",
+                        "params": {}
+                    })
+                }
+                Notification::ToolStart(tool_name) => {
+                    json!({
+                        "jsonrpc": "2.0",
+                        "method": "session/toolStart",
                         "params": {
-                            "sessionId": session_id,
-                            "progress": progress,
-                            "message": message
+                            "tool": tool_name
                         }
                     })
                 }
-                Notification::ToolOutput { session_id, output } => {
+                Notification::ToolDone(tool_name, output) => {
                     json!({
                         "jsonrpc": "2.0",
-                        "method": "session/toolOutput",
+                        "method": "session/toolDone",
                         "params": {
-                            "sessionId": session_id,
+                            "tool": tool_name,
                             "output": output
                         }
                     })
                 }
-                Notification::AssistantMessage { session_id, message } => {
+                Notification::TextChunk(text) => {
                     json!({
                         "jsonrpc": "2.0",
-                        "method": "session/assistantMessage",
+                        "method": "session/textChunk",
                         "params": {
-                            "sessionId": session_id,
-                            "message": message
+                            "text": text
                         }
                     })
                 }
             };
             
             let msg_str = rpc_msg.to_string();
-            if let Err(e) = write.send(Message::Text(msg_str)).await {
+            if let Err(e) = write.send(Message::Text(msg_str.into())).await {
                 error!(error = %e, "Failed to send notification");
                 break;
             }
@@ -381,18 +385,11 @@ async fn handle_websocket_prompt(
     let result = handle.await;
     
     match result {
-        Ok(Ok(final_output)) => {
+        Ok(final_output) => {
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
                 "result": final_output
-            })
-        }
-        Ok(Err(e)) => {
-            json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": {"code": e.code(), "message": e.to_string()}
             })
         }
         Err(e) => {
