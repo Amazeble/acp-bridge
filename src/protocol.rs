@@ -50,7 +50,7 @@ impl Session {
 }
 
 /// ACP-layer error codes following JSON-RPC 2.0 conventions.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, serde::Serialize, thiserror::Error)]
 pub enum AcpError {
     #[error("Missing required parameter: {field}")]
     MissingParam { field: String },
