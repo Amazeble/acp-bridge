@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::Message;
 pub struct WebSocketConfig {
     /// Host to bind to (default: "127.0.0.1")
     pub host: String,
-    /// Port to listen on (default: 8765)
+    /// Port to listen on (default: 7777)
     pub port: u16,
 }
 
@@ -26,7 +26,7 @@ impl Default for WebSocketConfig {
     fn default() -> Self {
         Self {
             host: "127.0.0.1".to_string(),
-            port: 8765,
+            port: 7777,
         }
     }
 }
@@ -38,14 +38,14 @@ impl WebSocketConfig {
         let port = std::env::var("WS_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
-            .unwrap_or(8765);
+            .unwrap_or(7777);
         
         Self { host, port }
     }
     
     /// Get the full address string
     pub fn address(&self) -> String {
-        format!("{}:{}", self.host, self.port)
+        format!("{}:{}/acp", self.host, self.port)
     }
 }
 
