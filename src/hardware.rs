@@ -172,6 +172,7 @@ fn parse_rocm_smi(text: &str) -> Vec<GpuInfo> {
 
 /// Sysfs scan for AMD GPUs when rocm-smi is not installed. Only reports
 /// presence + vendor; VRAM is unknown without ROCm or hwmon parsing.
+#[cfg(target_os = "linux")]
 fn scan_sysfs_amd() -> Vec<GpuInfo> {
     let mut gpus = Vec::new();
     let drm = match std::fs::read_dir("/sys/class/drm") {
@@ -201,6 +202,12 @@ fn scan_sysfs_amd() -> Vec<GpuInfo> {
         }
     }
     gpus
+}
+
+#[cfg(not(target_os = "linux"))]
+fn scan_sysfs_amd() -> Vec<GpuInfo> {
+    // Sysfs is Linux-specific; return empty on other platforms
+    Vec::new()
 }
 
 fn build_recommendations(os: &str, gpus: &[GpuInfo]) -> Vec<String> {
