@@ -194,7 +194,7 @@ async fn handle_websocket_connection(
                         "{\"error\":\"internal error\"}".to_string()
                     });
                     
-                    if let Err(e) = write.send(Message::Text(response_str)).await {
+                    if let Err(e) = write.send(Message::Text(response_str.into())).await {
                         error!(error = %e, "Failed to send response");
                         break;
                     }
