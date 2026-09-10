@@ -209,7 +209,7 @@ async fn handle_websocket_connection(
                         break;
                     }
                 }
-                Message::Binary(_) | Message::Frame(_) => {
+                Message::Binary(_) | Message::Frame(_) | Message::Pong(_) => {
                     debug!("Ignoring non-text message");
                 }
             },
