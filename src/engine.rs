@@ -465,6 +465,7 @@ pub fn session_end(state: &AppState, session_id: &str) -> Result<(), AcpError> {
 // Result type
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct PromptResult {
     pub status: String,
     pub text: String,
