@@ -1,16 +1,13 @@
 ```
-# Build scripts
-build.bat
-
 # Compiled and build artifacts
+target/
+*.o
+*.obj
 *.exe
 *.dll
 *.so
 *.a
-*.obj
 *.out
-build/
-target/
 
 # Dependencies
 **/node_modules/
@@ -35,8 +32,10 @@ target/
 # Editors
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# System files
-.DS_Store
-Thumbs.db
+# Rust specific
+Cargo.lock
+**/target/
 ```
