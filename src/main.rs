@@ -1,6 +1,6 @@
 //! acp-bridge — Minimal ACP adapter for local AI.
 //!
-//! Single transport: stdin/stdout JSON-RPC 2.0 (ACP).
+//! Transports: stdin/stdout JSON-RPC 2.0 (ACP) or WebSocket server.
 //! Spawns by openab, Zed, JetBrains, or any ACP harness.
 
 use acp_bridge::acp;
@@ -10,6 +10,7 @@ use acp_bridge::engine::{self, AppState, Notification};
 use acp_bridge::hardware;
 use acp_bridge::llm;
 use acp_bridge::protocol::{AcpError, JsonRpcRequest};
+use acp_bridge::websocket;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,6 +27,8 @@ enum RunMode {
     Acp,
     /// Benchmark mode — run fixture prompts against the configured LLM, print stats, exit.
     Bench,
+    /// WebSocket server mode — listen for ACP connections over WebSocket
+    WebSocket,
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +59,9 @@ async fn main() {
         println!(
             "  --bench      Benchmark mode — run fixture prompts against LLM, print stats, exit"
         );
+        println!(
+            "  --ws         WebSocket mode — start WebSocket server for remote ACP connections"
+        );
         println!();
         println!("OPTIONS:");
         println!("  --version    Print version");
@@ -63,11 +69,15 @@ async fn main() {
         println!();
         println!("ENVIRONMENT:");
         println!("  LLM_BASE_URL, LLM_MODEL, LLM_API_KEY, LLM_TIMEOUT, ...");
+        println!("  WS_HOST      WebSocket bind host (default: 127.0.0.1)");
+        println!("  WS_PORT      WebSocket bind port (default: 8765)");
         return;
     }
 
     let mode = if args.iter().any(|a| a == "--bench") {
         RunMode::Bench
+    } else if args.iter().any(|a| a == "--ws" || a == "--websocket") {
+        RunMode::WebSocket
     } else {
         RunMode::Acp
     };
@@ -142,8 +152,17 @@ async fn main() {
         });
     }
 
-    // Run ACP stdin/stdout loop
-    run_acp_loop(state).await;
+    // Run appropriate transport
+    match mode {
+        RunMode::Acp => run_acp_loop(state).await,
+        RunMode::WebSocket => {
+            let ws_config = websocket::WebSocketConfig::from_env();
+            if let Err(e) = websocket::run_websocket_server(state, ws_config).await {
+                error!(error = %e, "WebSocket server failed");
+            }
+        }
+        RunMode::Bench => unreachable!(), // handled above
+    }
 }
 
 // ---------------------------------------------------------------------------

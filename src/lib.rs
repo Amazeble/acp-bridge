@@ -7,6 +7,7 @@
 //! - `acp` — ACP notification/response helpers
 //! - `tools` — Built-in sandboxed file tools
 //! - `hardware` — Best-effort host backend (GPU / accel) detection
+//! - `websocket` — WebSocket transport server
 
 pub mod acp;
 pub mod bench;
@@ -16,3 +17,4 @@ pub mod hardware;
 pub mod llm;
 pub mod protocol;
 pub mod tools;
+pub mod websocket;
