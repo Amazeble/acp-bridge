@@ -12,6 +12,12 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 use tokio_tungstenite::tungstenite::Message;
+use tokio_rustls::TlsAcceptor;
+use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys};
+use rustls::ServerConfig;
+use std::fs::File;
+use std::io::BufReader;
+use tokio_tungstenite::MaybeTlsStream;
 
 /// WebSocket server configuration
 #[derive(Debug, Clone)]
@@ -20,6 +26,10 @@ pub struct WebSocketConfig {
     pub host: String,
     /// Port to listen on (default: 7777)
     pub port: u16,
+    /// Path to TLS certificate file (optional, enables WSS if provided)
+    pub tls_cert_path: Option<String>,
+    /// Path to TLS private key file (optional, enables WSS if provided)
+    pub tls_key_path: Option<String>,
 }
 
 impl Default for WebSocketConfig {
@@ -27,6 +37,8 @@ impl Default for WebSocketConfig {
         Self {
             host: "127.0.0.1".to_string(),
             port: 7777,
+            tls_cert_path: None,
+            tls_key_path: None,
         }
     }
 }
@@ -39,13 +51,29 @@ impl WebSocketConfig {
             .ok()
             .and_then(|p| p.parse().ok())
             .unwrap_or(7777);
+        let tls_cert_path = std::env::var("WS_TLS_CERT").ok();
+        let tls_key_path = std::env::var("WS_TLS_KEY").ok();
         
-        Self { host, port }
+        Self { host, port, tls_cert_path, tls_key_path }
     }
     
     /// Get the full address string
     pub fn address(&self) -> String {
         format!("{}:{}/acp", self.host, self.port)
+    }
+    
+    /// Check if TLS is enabled
+    pub fn is_tls_enabled(&self) -> bool {
+        self.tls_cert_path.is_some() && self.tls_key_path.is_some()
+    }
+    
+    /// Get the protocol prefix (ws:// or wss://)
+    pub fn protocol(&self) -> &'static str {
+        if self.is_tls_enabled() {
+            "wss://"
+        } else {
+            "ws://"
+        }
     }
 }
 
@@ -57,17 +85,52 @@ pub async fn run_websocket_server(state: Arc<AppState>, ws_config: WebSocketConf
     info!(
         host = %ws_config.host,
         port = %ws_config.port,
-        "WebSocket server listening on ws://{}",
+        protocol = %ws_config.protocol(),
+        "WebSocket server listening on {}{}",
+        ws_config.protocol(),
         addr
     );
+    
+    // Load TLS certificate and key if provided
+    let tls_acceptor = if let (Some(cert_path), Some(key_path)) = (&ws_config.tls_cert_path, &ws_config.tls_key_path) {
+        let cert_file = File::open(cert_path)?;
+        let key_file = File::open(key_path)?;
+        
+        let mut cert_reader = BufReader::new(cert_file);
+        let mut key_reader = BufReader::new(key_file);
+        
+        let certs_vec = certs(&mut cert_reader)
+            .collect::<Result<Vec<_>, _>>()?;
+        
+        // Try to load PKCS8 key first, then RSA key
+        let key = pkcs8_private_keys(&mut key_reader)
+            .filter_map(|r| r.ok())
+            .next()
+            .or_else(|| {
+                let mut key_reader2 = BufReader::new(File::open(key_path).ok()?);
+                rsa_private_keys(&mut key_reader2)
+                    .filter_map(|r| r.ok())
+                    .next()
+            })
+            .ok_or("No private key found")?;
+        
+        let config = ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs_vec, rustls::pki_types::PrivateKeyDer::Pkcs8(key))?;
+        
+        Some(TlsAcceptor::from(Arc::new(config)))
+    } else {
+        None
+    };
     
     loop {
         match listener.accept().await {
             Ok((stream, peer_addr)) => {
                 debug!(%peer_addr, "New TCP connection accepted");
                 let state_clone = Arc::clone(&state);
+                let tls_acceptor_clone = tls_acceptor.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_websocket_connection(stream, state_clone).await {
+                    if let Err(e) = handle_websocket_connection(stream, state_clone, tls_acceptor_clone).await {
                         error!(error = %e, "WebSocket connection error");
                     }
                 });
@@ -83,8 +146,18 @@ pub async fn run_websocket_server(state: Arc<AppState>, ws_config: WebSocketConf
 async fn handle_websocket_connection(
     stream: TcpStream,
     state: Arc<AppState>,
+    tls_acceptor: Option<TlsAcceptor>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let ws_stream = tokio_tungstenite::accept_async(stream).await?;
+    // Upgrade to TLS if acceptor is provided
+    let tcp_stream = if let Some(acceptor) = &tls_acceptor {
+        let tls_stream = acceptor.accept(stream).await?;
+        info!("TLS handshake completed");
+        MaybeTlsStream::Rustls(tls_stream)
+    } else {
+        MaybeTlsStream::Plain(stream)
+    };
+    
+    let ws_stream = tokio_tungstenite::server::handshake(tcp_stream).await?;
     let (mut write, mut read) = ws_stream.split();
     
     info!("WebSocket connection established");

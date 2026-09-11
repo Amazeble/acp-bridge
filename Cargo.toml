@@ -28,8 +28,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2"
 toml = "0.8"
-tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-certs"] }
 futures-util = "0.3"
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+rustls = "0.23"
 
 [dev-dependencies]
 tokio-test = "0.4"

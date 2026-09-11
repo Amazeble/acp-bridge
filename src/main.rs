@@ -70,7 +70,9 @@ async fn main() {
         println!("ENVIRONMENT:");
         println!("  LLM_BASE_URL, LLM_MODEL, LLM_API_KEY, LLM_TIMEOUT, ...");
         println!("  WS_HOST      WebSocket bind host (default: 127.0.0.1)");
-        println!("  WS_PORT      WebSocket bind port (default: 8765)");
+        println!("  WS_PORT      WebSocket bind port (default: 7777)");
+        println!("  WS_TLS_CERT  Path to TLS certificate file (enables WSS)");
+        println!("  WS_TLS_KEY   Path to TLS private key file (enables WSS)");
         return;
     }
 
@@ -157,6 +159,17 @@ async fn main() {
         RunMode::Acp => run_acp_loop(state).await,
         RunMode::WebSocket => {
             let ws_config = websocket::WebSocketConfig::from_env();
+            
+            // Print available URLs after backend is loaded successfully
+            let protocol = ws_config.protocol();
+            let addr = ws_config.address();
+            info!("Available WebSocket URL: {}{}", protocol, addr);
+            if ws_config.is_tls_enabled() {
+                info!("TLS enabled - secure WebSocket connection (WSS)");
+            } else {
+                info!("TLS not enabled - insecure WebSocket connection (WS). Set WS_TLS_CERT and WS_TLS_KEY environment variables to enable WSS.");
+            }
+            
             if let Err(e) = websocket::run_websocket_server(state, ws_config).await {
                 error!(error = %e, "WebSocket server failed");
             }
