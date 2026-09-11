@@ -7,7 +7,6 @@ use acp_bridge::acp;
 use acp_bridge::bench;
 use acp_bridge::config::ConfigFile;
 use acp_bridge::engine::{self, AppState, Notification};
-use acp_bridge::hardware;
 use acp_bridge::llm;
 use acp_bridge::protocol::{AcpError, JsonRpcRequest};
 use acp_bridge::websocket;
@@ -107,9 +106,6 @@ async fn main() {
     };
 
     if let RunMode::Bench = mode {
-        for line in hardware::detect().report_lines() {
-            info!("{line}");
-        }
         info!(
             base_url = %config.base_url,
             model = %config.model,
@@ -130,10 +126,6 @@ async fn main() {
         session_idle_timeout_secs = config.session_idle_timeout_secs,
         "Starting acp-bridge"
     );
-
-    for line in hardware::detect().report_lines() {
-        info!("{line}");
-    }
 
     // Probe backend
     probe_backend(&config).await;
